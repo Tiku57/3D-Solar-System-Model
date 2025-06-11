@@ -77,6 +77,6 @@ This project creates an interactive 3D simulation of our solar system using [Thr
 
 **Aaditya Sattawan**  
 ```
-https://drive.google.com/drive/u/1/folders/1T6EMDMqjbhWG9c8ATP18K2lh6N-SnQZE
+https://github.com/Tiku57/3D-Solar-System-Model
 ```
 ---

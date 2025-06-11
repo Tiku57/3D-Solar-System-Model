@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Solar System</title>
+    <!-- Tailwind CSS CDN for easy styling of UI elements -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for the Inter font, improving readability -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Variables for theming */
+        :root {
+            --bg-primary: #0d1117; /* Dark background */
+            --text-primary: #e2e8f0; /* Light text */
+            --panel-bg: rgba(30, 41, 59, 0.7); /* Dark semi-transparent panel */
+            --slider-track-bg: #4a5568; /* Dark slider track */
+            --tooltip-bg: rgba(0, 0, 0, 0.7); /* Dark tooltip */
+            --button-bg: #2563eb; /* Blue button */
+            --button-hover-bg: #1d4ed8; /* Darker blue button on hover */
+            --star-color: #ffffff; /* Default star color (white) */
+            --orbit-line-color: #ffffff; /* Default orbit line color (white) */
+        }
+
+        /* Light theme overrides */
+        body.light-theme {
+            --bg-primary: #f0f4f8; /* Light background */
+            --text-primary: #1a202c; /* Dark text */
+            --panel-bg: rgba(255, 255, 255, 0.8); /* Light semi-transparent panel */
+            --slider-track-bg: #cbd5e0; /* Light slider track */
+            --tooltip-bg: rgba(255, 255, 255, 0.8); /* Light tooltip */
+            --button-bg: #3b82f6; /* Lighter blue button */
+            --button-hover-bg: #2563eb; /* Blue button on hover */
+            --star-color: #000000; /* Black stars in light mode */
+            --orbit-line-color: #000000; /* Black orbit lines in light mode */
+        }
+
+        /* General body styling for a dark, space-like background */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevents scrollbars on the page */
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--bg-primary); /* Uses CSS variable */
+            color: var(--text-primary); /* Uses CSS variable */
+            position: relative; /* Needed for positioning fixed children */
+        }
+        /* Styling for the Three.js canvas, fixed to cover the entire screen */
+        #solar-system-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background-color: transparent; /* Allows background stars to show through */
+            z-index: 1; /* Ensures canvas is behind control panel */
+        }
+        /* Styling for the control panel at the bottom of the screen */
+        #control-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--panel-bg); /* Uses CSS variable */
+            padding: 1rem;
+            display: flex;
+            flex-wrap: wrap; /* Allows control items to wrap to the next line */
+            justify-content: center; /* Centers items horizontally */
+            align-items: flex-end; /* Aligns items to the bottom within the panel */
+            gap: 1rem; /* Spacing between control items */
+            z-index: 10; /* Ensures control panel is above the canvas */
+            border-top-left-radius: 0.75rem; /* Rounded corners for aesthetic appeal */
+            border-top-right-radius: 0.75rem;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06); /* Subtle shadow */
+        }
+        /* Styling for range input (sliders) */
+        input[type="range"] {
+            -webkit-appearance: none; /* Removes default browser styling */
+            width: 100%;
+            height: 8px;
+            background: var(--slider-track-bg); /* Uses CSS variable */
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+            border-radius: 4px;
+        }
+        /* Styling for the slider thumb (the draggable part) for WebKit browsers */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%; /* Circular thumb */
+            background: #63b3ed; /* Blue thumb color (constant) */
+            cursor: pointer;
+        }
+        /* Styling for the slider thumb for Mozilla Firefox */
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #63b3ed; /* Blue thumb color (constant) */
+            cursor: pointer;
+        }
+
+        /* Styling for the planet tooltip that appears on hover */
+        #planet-tooltip {
+            position: absolute;
+            background-color: var(--tooltip-bg); /* Uses CSS variable */
+            color: var(--text-primary); /* Uses CSS variable */
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            pointer-events: none; /* Allows mouse events to pass through to the canvas */
+            opacity: 0; /* Initially hidden */
+            transition: opacity 0.2s ease-in-out; /* Smooth fade in/out effect */
+            z-index: 100; /* Ensures tooltip is above other elements */
+            transform: translate(-50%, -100%); /* Centers and places tooltip above the cursor */
+        }
+
+        /* Styling for individual planet control items within the control panel */
+        .planet-control-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.75rem;
+            background-color: rgba(51, 65, 85, 0.8); /* Slightly lighter semi-transparent background (constant) */
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* Subtle shadow (constant) */
+            width: 150px; /* Fixed width for consistent layout */
+            flex-shrink: 0; /* Prevents items from shrinking */
+        }
+        /* Styling for labels within planet control items */
+        .planet-control-item label {
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Button styles using CSS variables */
+        #pause-resume-button, #theme-toggle-button {
+            background-color: var(--button-bg);
+            color: white;
+            font-weight: bold;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease-in-out;
+            transform: scale(1);
+        }
+
+        #pause-resume-button:hover, #theme-toggle-button:hover {
+            background-color: var(--button-hover-bg);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay displayed while Three.js scene initializes -->
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+        <div class="text-white text-lg font-semibold">Loading Solar System...</div>
+    </div>
+
+    <!-- The Three.js canvas where the 3D simulation is rendered -->
+    <canvas id="solar-system-canvas"></canvas>
+
+    <!-- Control panel for managing simulation parameters -->
+    <div id="control-panel">
+        <h2 class="text-center text-2xl font-bold text-white w-full mb-4 md:mb-2">Solar System Controls</h2>
+        <div class="flex justify-center space-x-4 w-full mb-4">
+            <!-- Pause/Resume button for animation -->
+            <button id="pause-resume-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                Pause
+            </button>
+            <!-- New Dark/Light Mode Toggle Button -->
+            <button id="theme-toggle-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
+                Light Mode
+            </button>
+        </div>
+        <!-- Planet speed control sliders will be dynamically added here by JavaScript -->
+    </div>
+
+    <!-- Tooltip element for displaying planet names on hover/touch -->
+    <div id="planet-tooltip"></div>
+
+    <!-- Three.js library CDN import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- Global Variables for Three.js and Simulation State ---
+        let scene, camera, renderer, clock; // Core Three.js components
+        let animationFrameId; // Stores the ID returned by requestAnimationFrame for pausing
+        let isPaused = false; // Flag to control animation pause/resume state
+
+        // Raycasting variables for mouse/touch interaction (hover/click detection)
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2(); // Stores normalized mouse coordinates
+        let tooltip = document.getElementById('planet-tooltip'); // Reference to the tooltip HTML element
+        let hoveredObject = null; // Stores the Three.js object currently being hovered over
+
+        // Array to store planet data (mesh, orbit group, speeds, etc.)
+        const planets = [];
+        let sunMesh; // Reference to the Sun's Three.js mesh
+        let stars; // Global variable to hold the stars object
+
+        // Constants for simulation speeds and orbital properties
+        const DEFAULT_ORBITAL_SPEED_FACTOR = 0.005; // Base orbital speed multiplier
+        const DEFAULT_ROTATIONAL_SPEED_FACTOR = 0.01; // Base rotational speed multiplier
+        const ORBIT_ECCENTRICITY = 0.1; // Global eccentricity for elliptical orbits (0 for perfect circles)
+
+        /**
+         * Initializes the Three.js scene, camera, renderer, and lighting.
+         * Sets up event listeners and hides the loading overlay.
+         */
+        function init() {
+            // Scene: The container for all 3D objects, lights, and cameras
+            scene = new THREE.Scene();
+
+            // Camera: Defines the viewable area of the scene
+            // PerspectiveCamera(field of view, aspect ratio, near clipping plane, far clipping plane)
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 50, 100); // Initial camera position (x, y, z)
+            camera.lookAt(0, 0, 0); // Points the camera at the center of the scene
+
+            // Renderer: Renders the scene onto the canvas using WebGL
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('solar-system-canvas'),
+                antialias: true, // Smooths edges of objects
+                alpha: true // Allows for a transparent background (useful for CSS background or stars)
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight); // Sets renderer size to match window
+            renderer.setPixelRatio(window.devicePixelRatio); // Adjusts for high-DPI screens
+
+            // Clock: Used for consistent animation timing independent of frame rate
+            clock = new THREE.Clock();
+
+            // Lights: Essential for making objects visible
+            // AmbientLight: Illuminates all objects equally from all directions (no shadows)
+            const ambientLight = new THREE.AmbientLight(0x333333); // Soft white light
+            scene.add(ambientLight);
+
+            // PointLight: Emits light from a single point in all directions (like the Sun)
+            const pointLight = new THREE.PointLight(0xffffff, 2); // White light, intensity 2
+            scene.add(pointLight);
+
+            // Add background stars for immersion (colors will be set by applySavedTheme)
+            addStars();
+
+            // --- Event Listeners ---
+            // Handles window resizing to adjust canvas and camera
+            window.addEventListener('resize', onWindowResize, false);
+            // Handles mouse movement for displaying planet tooltips
+            window.addEventListener('mousemove', onMouseMove, false);
+            // Handles touch movement for tooltips on touch devices
+            window.addEventListener('touchmove', onTouchMove, { passive: true });
+            // Handles touch end for hiding tooltips on touch devices
+            window.addEventListener('touchend', onTouchEnd);
+
+            // Hide the loading overlay once the scene is initialized
+            document.getElementById('loading-overlay').classList.add('hidden');
+
+            // Apply saved theme preference or default to dark to set initial colors
+            applySavedTheme();
+        }
+
+        /**
+         * Adjusts camera aspect ratio and renderer size when the window is resized.
+         */
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight; // Update aspect ratio
+            camera.updateProjectionMatrix(); // Recalculate projection matrix
+            renderer.setSize(window.innerWidth, window.innerHeight); // Resize renderer
+        }
+
+        /**
+         * Creates a spherical mesh (geometry + material).
+         * @param {number} radius - The radius of the sphere.
+         * @param {number} color - The hexadecimal color of the sphere.
+         * @param {boolean} emissive - True if the material should emit light (like the Sun).
+         * @returns {THREE.Mesh} The created Three.js mesh.
+         */
+        function createSphere(radius, color, emissive = false) {
+            const geometry = new THREE.SphereGeometry(radius, 32, 32); // (radius, width segments, height segments)
+            // Use MeshBasicMaterial for emissive objects (Sun), MeshLambertMaterial for others
+            const material = emissive ? new THREE.MeshBasicMaterial({ color: color }) : new THREE.MeshLambertMaterial({ color: color });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        /**
+         * Creates an elliptical orbit line for a planet.
+         * The line's shape matches the elliptical path the planet follows.
+         * @param {number} orbitalRadius - The average radius (semi-major axis) of the orbit.
+         * @param {number} eccentricity - The eccentricity of the ellipse (0 for circle).
+         * @returns {THREE.Line} The created Three.js line object representing the orbit.
+         */
+        function createEllipticalOrbitLine(orbitalRadius, eccentricity) {
+            const points = [];
+            const segments = 256; // Number of segments for a smoother elliptical line
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2; // Angle from 0 to 2PI
+                // Calculate radius at this angle for an elliptical path
+                const currentRadius = orbitalRadius * (1 - eccentricity * Math.cos(angle));
+                const x = currentRadius * Math.cos(angle);
+                const z = currentRadius * Math.sin(angle);
+                points.push(new THREE.Vector3(x, 0, z)); // Orbits are on the XZ plane
+            }
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineDashedMaterial({
+                // Color will be set dynamically by applyTheme, so it's not set here initially
+                dashSize: 3,     // Length of dashes
+                gapSize: 3       // Length of gaps
+            });
+
+            const line = new THREE.Line(geometry, material);
+            line.computeLineDistances(); // Required for LineDashedMaterial to work correctly
+            return line;
+        }
+
+        /**
+         * Creates a celestial body (Sun or Planet) and adds it to the scene.
+         * For planets, it also sets up an orbit group, an orbit line, and handles Saturn's ring.
+         * @param {string} name - Name of the celestial body.
+         * @param {number} radius - Radius of the body.
+         * @param {number} color - Color of the body (hexadecimal).
+         * @param {number} orbitalRadius - Average distance from the Sun (0 for Sun itself).
+         * @param {number} orbitalSpeed - Speed of orbit around the Sun.
+         * @param {number} rotationalSpeed - Speed of rotation on its own axis.
+         * @param {number} axialTilt - Axial tilt in radians (0 for no tilt).
+         * @param {boolean} isSun - True if it's the Sun.
+         */
+        function createCelestialBody(name, radius, color, orbitalRadius, orbitalSpeed, rotationalSpeed, axialTilt = 0, isSun = false) {
+            const body = createSphere(radius, color, isSun);
+            body.name = name; // Assign a name to the mesh for identification (e.g., for tooltips)
+
+            if (isSun) {
+                scene.add(body); // Sun is added directly to the scene
+                sunMesh = body; // Store reference to the Sun's mesh
+            } else {
+                // For planets, create an empty `Object3D` (orbitGroup) to handle orbital motion.
+                // The planet mesh will be a child of this group.
+                const orbitGroup = new THREE.Object3D();
+                orbitGroup.add(body); // Add the planet mesh to its orbit group
+
+                // Apply axial tilt to the planet mesh itself
+                body.rotation.x = axialTilt;
+
+                // Initial position of the orbit group (will be moved in `animate` loop)
+                orbitGroup.position.set(orbitalRadius, 0, 0);
+
+                // Create the elliptical orbit line for this planet
+                const orbitLine = createEllipticalOrbitLine(orbitalRadius, ORBIT_ECCENTRICITY);
+                scene.add(orbitLine); // Add the orbit line to the scene
+
+                // Special handling for Saturn's rings
+                if (name === 'Saturn') {
+                    const ringGeometry = new THREE.RingGeometry(radius * 1.2, radius * 3.0, 64); // Inner, outer radius, segments
+                    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide }); // Grey color, render both sides
+                    const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                    ringMesh.rotation.x = Math.PI / 2; // Rotate to lie flat on the orbital plane
+                    ringMesh.rotation.y = Math.PI / 6; // Slight tilt for visual effect
+                    body.add(ringMesh); // Add ring as a child of Saturn's mesh, so it tilts with Saturn
+                }
+
+                scene.add(orbitGroup); // Add the planet's orbit group to the scene
+
+                // Store planet data in the global 'planets' array
+                planets.push({
+                    name: name,
+                    mesh: body,
+                    orbitGroup: orbitGroup,
+                    orbitalRadius: orbitalRadius,
+                    orbitalSpeed: orbitalSpeed,
+                    rotationalSpeed: rotationalSpeed,
+                    currentOrbitAngle: 0, // All planets start aligned on the X-axis for consistent reload
+                    orbitLine: orbitLine // Store the orbit line mesh here for theme updates
+                });
+            }
+        }
+
+        /**
+         * Populates the Three.js scene with the Sun and all 8 planets.
+         * Defines their scaled properties (radius, orbital distance, speeds, axial tilts).
+         */
+        function populateSolarSystem() {
+            // Create the Sun
+            createCelestialBody('Sun', 10, 0xffa500, 0, 0, 0.002, 0, true); // Sun has no orbital radius, no axial tilt
+
+            // Data for each planet: [name, radius, color, orbitalRadius, relativeOrbitalSpeed, rotationalSpeed, axialTilt (radians)]
+            // Radii and orbital distances are scaled for visual representation, not astronomical units.
+            // Orbital speeds are adjusted to reflect relative real-world speeds (inner planets faster).
+            const planetData = [
+                ['Mercury', 1.0, 0xcccccc, 20, 1.60, 0.005, 0.0001], // Smallest, fastest, minimal tilt
+                ['Venus', 2.0, 0xefef45, 35, 1.18, 0.003, Math.PI], // Retrograde rotation (180 deg tilt)
+                ['Earth', 2.5, 0x0077ff, 50, 1.00, 0.04, 23.4 * Math.PI / 180], // Earth's actual tilt
+                ['Mars', 1.5, 0xff0000, 70, 0.81, 0.035, 25.2 * Math.PI / 180],
+                ['Jupiter', 6.0, 0xcc9966, 110, 0.44, 0.02, 3.13 * Math.PI / 180],
+                ['Saturn', 5.0, 0xd4a017, 150, 0.32, 0.018, 26.7 * Math.PI / 180],
+                ['Uranus', 3.5, 0xadd8e6, 180, 0.23, 0.015, 97.77 * Math.PI / 180], // Uranus's extreme tilt
+                ['Neptune', 3.5, 0x4169e1, 210, 0.18, 0.012, 28.32 * Math.PI / 180]
+            ];
+
+            planetData.forEach(data => {
+                createCelestialBody(
+                    data[0], // name
+                    data[1], // radius
+                    data[2], // color
+                    data[3], // orbitalRadius
+                    data[4] * DEFAULT_ORBITAL_SPEED_FACTOR, // scaled orbitalSpeed
+                    data[5] * DEFAULT_ROTATIONAL_SPEED_FACTOR, // scaled rotationalSpeed
+                    data[6] // axialTilt
+                );
+            });
+
+            // Dynamically create the control panel sliders for each planet
+            createControlPanel();
+        }
+
+        /**
+         * Dynamically creates the sliders for each planet in the control panel,
+         * allowing users to adjust their orbital speed.
+         */
+        function createControlPanel() {
+            const controlPanel = document.getElementById('control-panel');
+            planets.forEach(planet => {
+                const planetControl = document.createElement('div');
+                planetControl.className = 'planet-control-item'; // Apply CSS class for styling
+                planetControl.innerHTML = `
+                    <label for="${planet.name.toLowerCase()}-speed" class="text-sm font-semibold text-white mb-1">${planet.name} Speed:</label>
+                    <input type="range" id="${planet.name.toLowerCase()}-speed" min="0.00001" max="0.02" step="0.00001" value="${planet.orbitalSpeed}" class="w-full">
+                `;
+                controlPanel.appendChild(planetControl);
+
+                // Add event listener to each slider to update planet's orbital speed
+                const slider = planetControl.querySelector(`#${planet.name.toLowerCase()}-speed`);
+                slider.addEventListener('input', (event) => {
+                    planet.orbitalSpeed = parseFloat(event.target.value);
+                });
+            });
+        }
+
+        /**
+         * Adds a background starfield to the scene.
+         */
+        function addStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({ size: 0.5 }); // Color will be set by applyTheme
+
+            const starVertices = [];
+            // Create a large number of stars for a dense background
+            for (let i = 0; i < 50000; i++) {
+                // Random positions for stars within a large spherical volume
+                const x = (Math.random() - 0.5) * 4000;
+                const y = (Math.random() - 0.5) * 4000;
+                const z = (Math.random() - 0.5) * 4000;
+                starVertices.push(x, y, z);
+            }
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3)); // Set positions
+            stars = new THREE.Points(starGeometry, starMaterial); // Assign to global variable
+            scene.add(stars);
+        }
+
+        /**
+         * Handles mouse movements for displaying planet tooltips.
+         * Uses raycasting to detect which 3D object the mouse is over.
+         * @param {MouseEvent} event - The mouse event.
+         */
+        function onMouseMove(event) {
+            const canvas = renderer.domElement;
+            const rect = canvas.getBoundingClientRect();
+            // Calculate mouse position in normalized device coordinates (-1 to +1 for x and y)
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera); // Update the raycaster with camera and mouse position
+
+            // Create an array of all interactable meshes (planets and the Sun)
+            const interactableMeshes = planets.map(p => p.mesh);
+            if (sunMesh) {
+                interactableMeshes.push(sunMesh);
+            }
+
+            // Find intersections with interactable meshes
+            const intersects = raycaster.intersectObjects(interactableMeshes);
+
+            if (intersects.length > 0) {
+                // An intersection is found
+                const intersectedObject = intersects[0].object;
+
+                // Determine if the intersected object is a planet or the Sun
+                const foundPlanet = planets.find(p => p.mesh === intersectedObject);
+                const foundSun = (intersectedObject === sunMesh) ? sunMesh : null;
+
+                let nameToShow = null;
+                if (foundPlanet) {
+                    nameToShow = foundPlanet.name;
+                } else if (foundSun) {
+                    nameToShow = foundSun.name;
+                }
+
+                // If a new object is hovered, update and show the tooltip
+                if (nameToShow && intersectedObject !== hoveredObject) {
+                    hoveredObject = intersectedObject;
+                    tooltip.textContent = nameToShow; // Set tooltip text
+
+                    // Get the 3D world position of the hovered object
+                    const vector = new THREE.Vector3();
+                    intersectedObject.getWorldPosition(vector);
+                    // Project the 3D world position to 2D screen coordinates
+                    vector.project(camera);
+
+                    // Convert normalized device coordinates to pixel coordinates for tooltip positioning
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                    tooltip.style.left = `${x}px`;
+                    tooltip.style.top = `${y}px`;
+                    tooltip.style.opacity = '1'; // Make tooltip visible
+                }
+            } else {
+                // No intersection or mouse left the previously hovered object
+                if (hoveredObject) {
+                    hoveredObject = null;
+                    tooltip.style.opacity = '0'; // Hide tooltip
+                }
+            }
+        }
+
+        /**
+         * Handles touch movements for displaying planet tooltips on mobile devices.
+         * @param {TouchEvent} event - The touch event.
+         */
+        function onTouchMove(event) {
+            if (event.touches.length > 0) {
+                const touch = event.touches[0];
+                const canvas = renderer.domElement;
+                const rect = canvas.getBoundingClientRect();
+
+                // Calculate touch position in normalized device coordinates
+                mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+
+                const interactableMeshes = planets.map(p => p.mesh);
+                if (sunMesh) {
+                    interactableMeshes.push(sunMesh);
+                }
+                const intersects = raycaster.intersectObjects(interactableMeshes);
+
+                if (intersects.length > 0) {
+                    const intersectedObject = intersects[0].object;
+                    const foundPlanet = planets.find(p => p.mesh === intersectedObject);
+                    const foundSun = (intersectedObject === sunMesh) ? sunMesh : null;
+
+                    let nameToShow = null;
+                    if (foundPlanet) {
+                        nameToShow = foundPlanet.name;
+                    } else if (foundSun) {
+                        nameToShow = foundSun.name;
+                    }
+
+                    if (nameToShow && intersectedObject !== hoveredObject) {
+                        hoveredObject = intersectedObject;
+                        tooltip.textContent = nameToShow;
+
+                        const vector = new THREE.Vector3();
+                        intersectedObject.getWorldPosition(vector);
+                        vector.project(camera);
+
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                        tooltip.style.left = `${x}px`;
+                        tooltip.style.top = `${y}px`;
+                        tooltip.style.opacity = '1';
+                    }
+                } else {
+                    if (hoveredObject) {
+                        hoveredObject = null;
+                        tooltip.style.opacity = '0';
+                    }
+                }
+            }
+        }
+
+        /**
+         * Hides the tooltip when a touch interaction ends (e.g., finger lifted).
+         */
+        function onTouchEnd() {
+            if (hoveredObject) {
+                hoveredObject = null;
+                tooltip.style.opacity = '0';
+            }
+        }
+
+        /**
+         * The main animation loop.
+         * Updates planet positions, rotations, and renders the scene.
+         */
+        function animate() {
+            // Request the next animation frame, creating a continuous loop
+            animationFrameId = requestAnimationFrame(animate);
+
+            // If the animation is paused, exit the function early
+            if (isPaused) return;
+
+            // Get the time elapsed since the last frame for frame-rate independent animation
+            const delta = clock.getDelta();
+
+            // Animate Sun's rotation
+            if (sunMesh) {
+                sunMesh.rotation.y += 0.002 * delta * 60; // Rotate Sun on its Y-axis
+                // Re-added the sun pulsing effect for visual appeal
+                const scale = 1 + Math.sin(clock.elapsedTime * 2) * 0.05; // Pulses 5% larger/smaller
+                sunMesh.scale.set(scale, scale, scale); // Apply scaling
+            }
+
+            // Animate planets' orbits and rotations
+            planets.forEach(planet => {
+                // Orbital motion: Update the current angle based on orbital speed and delta time
+                planet.currentOrbitAngle += planet.orbitalSpeed * delta * 60;
+
+                // Calculate current radius for elliptical orbit
+                const eccentricity = ORBIT_ECCENTRICITY; // Use global eccentricity
+                const currentRadius = planet.orbitalRadius * (1 - eccentricity * Math.cos(planet.currentOrbitAngle));
+
+                // Set the position of the planet's orbit group (which contains the planet mesh)
+                // This simulates the elliptical orbit around the Sun
+                planet.orbitGroup.position.x = currentRadius * Math.cos(planet.currentOrbitAngle);
+                planet.orbitGroup.position.z = currentRadius * Math.sin(planet.currentOrbitAngle);
+
+                // Rotational motion: Rotate the planet's mesh on its own Y-axis
+                planet.mesh.rotation.y += planet.rotationalSpeed * delta * 60;
+            });
+
+            // Render the scene from the perspective of the camera
+            renderer.render(scene, camera);
+        }
+
+        // --- Camera Interaction (Mouse and Touch Dragging) ---
+        let isDragging = false; // Flag to check if the mouse/touch is being dragged
+        let previousMousePosition = { x: 0, y: 0 }; // Stores the previous mouse/touch position for calculating delta
+
+        // Mouse down event listener for starting camera drag
+        document.getElementById('solar-system-canvas').addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        // Mouse up event listener for ending camera drag
+        document.getElementById('solar-system-canvas').addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Mouse move event listener for rotating the camera during drag
+        document.getElementById('solar-system-canvas').addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - previousMousePosition.x; // Change in X position
+                const deltaY = e.clientY - previousMousePosition.y; // Change in Y position
+
+                const rotationSpeed = 0.005; // Speed multiplier for camera rotation
+                // Rotate camera around the center (0,0,0) based on mouse drag
+                // Yaw (Y-axis rotation)
+                camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -deltaX * rotationSpeed);
+                // Pitch (X-axis rotation)
+                camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -deltaY * rotationSpeed);
+
+                camera.lookAt(0, 0, 0); // Ensure the camera always looks at the center of the solar system
+                previousMousePosition = { x: e.clientX, y: e.clientY }; // Update previous position
+            }
+            // The onMouseMove function for tooltip is called separately via window event listener.
+        });
+
+        // Touch start event listener for starting camera drag on mobile
+        document.getElementById('solar-system-canvas').addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) { // Only consider single touch for dragging
+                isDragging = true;
+                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+        }, { passive: true }); // Use passive: true for better scroll performance
+
+        // Touch end event listener for ending camera drag on mobile
+        document.getElementById('solar-system-canvas').addEventListener('touchend', () => {
+            isDragging = false;
+        });
+
+        // Touch move event listener for rotating the camera during touch drag on mobile
+        document.getElementById('solar-system-canvas').addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                const deltaX = e.touches[0].clientX - previousMousePosition.x;
+                const deltaY = e.touches[0].clientY - previousMousePosition.y;
+
+                const rotationSpeed = 0.005;
+                camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -deltaX * rotationSpeed);
+                camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -deltaY * rotationSpeed);
+
+                camera.lookAt(0, 0, 0);
+                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            // The onTouchMove function for tooltip is called separately via window event listener.
+        }, { passive: true });
+
+        /**
+         * Toggles the animation between paused and resumed states.
+         */
+        function togglePauseResume() {
+            isPaused = !isPaused; // Toggle the paused state
+            const button = document.getElementById('pause-resume-button');
+            if (isPaused) {
+                button.textContent = 'Resume'; // Change button text
+                cancelAnimationFrame(animationFrameId); // Stop the animation loop
+            } else {
+                button.textContent = 'Pause'; // Change button text
+                animate(); // Restart the animation loop
+            }
+        }
+
+        // Event listener for the Pause/Resume button
+        document.getElementById('pause-resume-button').addEventListener('click', togglePauseResume);
+
+
+        // --- Dark/Light Mode Toggle Feature ---
+        const themeToggleButton = document.getElementById('theme-toggle-button');
+
+        /**
+         * Applies the selected theme (dark or light) to the body and updates the Three.js renderer background.
+         * Also updates star and orbit line colors based on the theme.
+         * @param {string} theme - 'dark' or 'light'.
+         */
+        function applyTheme(theme) {
+            if (theme === 'light') {
+                document.body.classList.add('light-theme');
+                themeToggleButton.textContent = 'Dark Mode';
+            } else {
+                document.body.classList.remove('light-theme');
+                themeToggleButton.textContent = 'Light Mode';
+            }
+
+            // Get computed style to retrieve CSS variable values
+            const computedStyle = getComputedStyle(document.body);
+            const newStarColor = computedStyle.getPropertyValue('--star-color').trim();
+            const newOrbitLineColor = computedStyle.getPropertyValue('--orbit-line-color').trim();
+
+            // Update star material color
+            if (stars && stars.material) {
+                // Ensure the color is parsed correctly by Three.js Color object
+                stars.material.color.set(new THREE.Color(newStarColor));
+            }
+
+            // Update orbit line colors for all planets
+            planets.forEach(planet => {
+                if (planet.orbitLine && planet.orbitLine.material) {
+                    // Ensure the color is parsed correctly by Three.js Color object
+                    planet.orbitLine.material.color.set(new THREE.Color(newOrbitLineColor));
+                }
+            });
+
+            // Update the Three.js renderer's background color
+            renderer.setClearColor(theme === 'light' ? 0xf0f4f8 : 0x0d1117, 0);
+            renderer.clear(); // Clear the buffer with the new background color
+            localStorage.setItem('theme', theme); // Save theme preference
+        }
+
+        /**
+         * Checks local storage for a saved theme and applies it on page load.
+         */
+        function applySavedTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark'; // Default to 'dark' if no preference found
+            applyTheme(savedTheme);
+        }
+
+        // Event listener for the theme toggle button
+        themeToggleButton.addEventListener('click', () => {
+            const currentTheme = localStorage.getItem('theme') || 'dark'; // Get current theme
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark'; // Determine new theme
+            applyTheme(newTheme); // Apply the new theme
+        });
+
+
+        // --- Initialization on Window Load ---
+        // This function runs once the entire HTML document is loaded.
+        window.onload = function () {
+            init(); // Initialize the Three.js scene
+            populateSolarSystem(); // Create the Sun and planets
+            animate(); // Start the animation loop
+        };
+    </script>
+</body>
+</html>

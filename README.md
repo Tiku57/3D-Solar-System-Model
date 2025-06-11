@@ -1,5 +1,5 @@
 # 🌍 3D Solar System Simulation
-A JavaScript (Three.js) Project
+A JavaScript (ThreeJS) Project
 
 This project creates an interactive 3D simulation of our solar system using [Three.js](https://threejs.org/), a powerful JavaScript 3D library. It features the Sun at the center with all eight planets orbiting and rotating. Users can control the orbital speed of individual planets, pause/resume the animation, and toggle between dark and light themes.
 
